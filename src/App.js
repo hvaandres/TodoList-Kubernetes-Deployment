@@ -7,7 +7,7 @@ function App() {
   return (
     <div className="todo-app">
       <TodoList />
-     <h1>To-Do App</h1>
+     <h1>To-Do App Version</h1>
     </div>
   );
 }
