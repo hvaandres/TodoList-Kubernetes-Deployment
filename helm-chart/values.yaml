@@ -1,0 +1,22 @@
+replicaCount: 1
+
+image:
+  repository: testaharo.azurecr.io/todo-list
+  pullPolicy: IfNotPresent
+  tag: "amd64"
+
+# Container & Service port
+ports:
+  - name: http
+    containerPort: 3000
+    protocol: TCP
+
+service:
+  type: LoadBalancer
+  ports: 
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: internal-app
