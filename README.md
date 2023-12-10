@@ -1,3 +1,56 @@
+## About
+
+This app is a Todo app that use React, Redux, and Netlify Lambda functions. This is basically a demo to make sure we containerize the app and deploy it to Kubernetes using helm charts, and using Minikube or Kind.
+
+## Prerequisites
+
+- You will need to have Docker installed on your machine.
+- You will need to have Minikube or Kind installed on your machine.
+- You will need to have Helm installed on your machine.
+- You will need to have kubectl installed on your machine.
+
+## How to run the app
+- Clone the repo
+- Run `npm ci` to install the dependencies
+- Run `npm start` to start the app
+- Run `npm run build` to build the app
+- Run `npm run test` to run the tests
+
+## How to run the app in a container
+- Run `docker build -t todo-app .` to build the image
+- Run `docker run -p 3000:3000 todo-app` to run the container
+
+## If you have a container registry
+- Run `docker tag todo-app <your-registry>/todo-app` to tag the image
+- Run `docker push <your-registry>/todo-app` to push the image to the registry
+
+## Build the image with helmchart
+- Add your registry to the helmchart/values.yaml file
+- Add the deployment.yaml file to the helmchart/templates folder
+- Add the service.yaml file to the helmchart/templates folder
+
+## How to run the app in Kubernetes
+- Run `minikube start` to start the cluster
+- Run `helm install todo-app ./helmchart` to build the app within helmchart
+- Run `helm uninstall todo-app` to uninstall the app
+
+## Check the app
+- Run `minikube service todo-app` to check the app
+- Run `minikube dashboard` to check the dashboard
+- Check the pods, deployments, and services:
+  - Run `kubectl get pods`
+  - Run `kubectl get deployments`
+  - Run `kubectl get services`
+
+## How to run the app in Kind
+- Run `kind create cluster --name todo-app` to create the cluster
+- Run `helm install todo-app ./helmchart` to build the app within helmchart
+- Run `helm uninstall todo-app` to uninstall the app
+- Check the pods, deployments, and services:
+  - Run `kubectl get pods`
+  - Run `kubectl get deployments`
+  - Run `kubectl get services`
+
 ## Create-React-App-Lambda
 
 This project is a reference demo showing you how to use [Create React App v3](https://github.com/facebookincubator/create-react-app) and [netlify-lambda v1](https://github.com/netlify/netlify-lambda) together in a [Netlify Dev](https://www.netlify.com/docs/cli/?utm_source=github&utm_medium=swyx-CRAL&utm_campaign=devex#netlify-dev-beta) workflow. You can clone this and immediately be productive with a React app with serverless Netlify Functions in the same repo. Alternatively you can deploy straight to Netlify with this one-click Deploy:
