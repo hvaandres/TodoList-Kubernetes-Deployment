@@ -20,13 +20,15 @@ jobs:
       - name: Install Syft
         run: |
           curl -sSL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh
-          # Add syft to PATH
-          echo "$HOME/bin" >> $GITHUB_ENV
-          echo "$PATH"
+          # Print the installed syft directory to verify its location
+          echo "Syft installed in: $HOME/bin"
+          # Verify syft installation by adding it to the PATH temporarily
+          export PATH=$HOME/bin:$PATH
           syft version
 
       - name: Generate SBOM
         run: |
+          export PATH=$HOME/bin:$PATH
           syft sbom . -o cyclonedx-json > sbom.json
 
       - name: Install jq
@@ -35,6 +37,7 @@ jobs:
       - name: Parse SBOM for vulnerabilities
         id: parse_sbom
         run: |
+          export PATH=$HOME/bin:$PATH
           critical_vulns=$(jq '[.components[] | select(.vulnerabilities | length > 0) | select(.vulnerabilities[] | .severity == "critical")] | length' sbom.json)
           echo "Critical vulnerabilities count: $critical_vulns"
           echo "::set-output name=critical::$critical_vulns"
