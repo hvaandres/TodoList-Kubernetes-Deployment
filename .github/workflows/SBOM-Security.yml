@@ -20,6 +20,8 @@ jobs:
       - name: Install Syft
         run: |
           curl -sSL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh
+          # Add syft to PATH
+          echo "$HOME/bin" >> $GITHUB_ENV
           echo "$PATH"
           syft version
 
