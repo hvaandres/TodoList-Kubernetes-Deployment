@@ -15,12 +15,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Create directory for SBOM
-        run: mkdir -p /workspace
-
       - name: Generate SBOM using Syft Docker image
         run: |
-          docker run --rm -v $(pwd):/workspace ghcr.io/anchore/syft:latest sbom /workspace --output cyclonedx-json /workspace/sbom.json
+          docker run --rm -v $(pwd):/workspace ghcr.io/anchore/syft:latest sbom /workspace --output cyclonedx-json 
 
   index-sbom:
     runs-on: ubuntu-latest
@@ -28,7 +25,7 @@ jobs:
     steps:
       - name: Generate SBOM Index using Scout SBOM Indexer
         run: |
-          docker run --rm -v $(pwd):/workspace docker/scout-sbom-indexer:latest index /workspace/sbom.json --output /workspace/indexed-sbom.json
+          docker run --rm -v $(pwd):/workspace docker/scout-sbom-indexer:latest index /workspace/sbom.json --output cyclonedx-json 
 
   parse-sbom:
     runs-on: ubuntu-latest
