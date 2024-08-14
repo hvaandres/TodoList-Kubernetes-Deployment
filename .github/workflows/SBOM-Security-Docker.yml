@@ -1,4 +1,4 @@
-name: OSV-Scanner with Syft
+name: OSV-Scanner with Scout SBOM Indexer
 
 on:
   pull_request:
@@ -11,17 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  scan-scheduled:
-    if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
-    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@1f1242919d8a60496dd1874b24b62b2370ed4c78" # v1.7.1
-    with:
-      scan-args: |-
-        -r
-        --skip-git
-        ./
-
   scan-pr:
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+    if: ${{ github.event_name == 'pull_request' }}
     uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@1f1242919d8a60496dd1874b24b62b2370ed4c78" # v1.7.1
     with:
       scan-args: |-
@@ -42,24 +33,32 @@ jobs:
 
       - name: Generate SBOM using Syft Docker image
         run: |
-          docker run --rm -v $(pwd):/workspace paketobuildpacks/syft:latest sbom /workspace --output cyclonedx-json /workspace > sbom.json
+          docker run --rm -v $(pwd):/workspace ghcr.io/anchore/syft:latest sbom /workspace --output cyclonedx-json /workspace/sbom.json
+
+  index-sbom:
+    runs-on: ubuntu-latest
+    needs: generate-sbom
+    steps:
+      - name: Generate SBOM Index using Scout SBOM Indexer
+        run: |
+          docker run --rm -v $(pwd):/workspace docker/scout-sbom-indexer:latest index /workspace/sbom.json --output /workspace/indexed-sbom.json
 
   parse-sbom:
     runs-on: ubuntu-latest
-    needs: generate-sbom
+    needs: index-sbom
     steps:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Parse SBOM for critical vulnerabilities
+      - name: Parse Indexed SBOM for Critical Vulnerabilities
         id: parse_sbom
         run: |
-          critical_vulns=$(jq '[.components[] | select(.vulnerabilities | length > 0) | select(.vulnerabilities[] | .severity == "critical")] | length' sbom.json)
+          critical_vulns=$(jq '[.components[] | select(.vulnerabilities | length > 0) | select(.vulnerabilities[] | .severity == "critical")] | length' /workspace/indexed-sbom.json)
           echo "Critical vulnerabilities count: $critical_vulns"
           echo "::set-output name=critical::$critical_vulns"
 
-      - name: Fail PR if critical vulnerabilities are found
+      - name: Fail PR if Critical Vulnerabilities are Found
         if: steps.parse_sbom.outputs.critical != '0'
         run: |
-          echo "Critical vulnerabilities found in SBOM!"
+          echo "Critical vulnerabilities found in Indexed SBOM!"
           exit 1
