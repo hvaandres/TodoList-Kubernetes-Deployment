@@ -20,6 +20,7 @@ jobs:
       - name: Install Syft
         run: |
           curl -sSL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh
+          echo "$PATH"
           syft version
 
       - name: Generate SBOM
@@ -27,7 +28,7 @@ jobs:
           syft sbom . -o cyclonedx-json > sbom.json
 
       - name: Install jq
-        run: sudo apt-get install jq
+        run: sudo apt-get install -y jq
 
       - name: Parse SBOM for vulnerabilities
         id: parse_sbom
