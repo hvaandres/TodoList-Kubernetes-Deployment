@@ -1,4 +1,4 @@
-name: OSV-Scanner with Scout SBOM Indexer
+name: OSV-Scanner with Syft
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ jobs:
 
       - name: Generate SBOM using Syft Docker image
         run: |
-          docker run --rm -v $(pwd):/workspace ghcr.io/anchore/syft:latest sbom /workspace --output cyclonedx-json /workspace/sbom.json
+          docker run --rm -v $(pwd):/workspace ghcr.io/anchore/syft:latest sbom /workspace --output cyclonedx-json > /workspace/sbom.json
 
   index-sbom:
     runs-on: ubuntu-latest
