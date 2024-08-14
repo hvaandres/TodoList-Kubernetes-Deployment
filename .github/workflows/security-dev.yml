@@ -1,4 +1,4 @@
-name: Security-Dev-Branch
+name: Security Scan
 
 on:
   pull_request:
@@ -18,18 +18,28 @@ jobs:
           node-version: '14'
 
       - name: Install dependencies
-        run: npm ci install
+        run: npm install
 
       - name: Run npm audit
         id: audit
         run: |
-          audit_results=$(npm audit --production --json)
-          echo "$audit_results" > audit-results.json
-          critical_vulns=$(echo "$audit_results" | jq '.metadata.vulnerabilities.critical')
-          echo "::set-output name=critical::$critical_vulns"
+          npm audit --production --json > audit-results.json || { echo "npm audit failed"; exit 1; }
+          cat audit-results.json
 
       - name: Check for critical vulnerabilities
-        if: steps.audit.outputs.critical != '0'
+        id: check_vulns
+        run: |
+          if ! command -v jq &> /dev/null; then
+            echo "jq not found, installing..."
+            sudo apt-get install jq
+          fi
+          
+          critical_vulns=$(jq '.metadata.vulnerabilities.critical' < audit-results.json)
+          echo "Critical vulnerabilities count: $critical_vulns"
+          echo "::set-output name=critical::$critical_vulns"
+
+      - name: Fail PR if critical vulnerabilities are found
+        if: steps.check_vulns.outputs.critical != '0'
         run: |
           echo "Critical vulnerabilities found!"
           cat audit-results.json
