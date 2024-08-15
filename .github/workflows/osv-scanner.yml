@@ -107,3 +107,13 @@ jobs:
             --output=results.sarif \
             --gh-annotations=false \
             --fail-on-vuln=true
+
+      - name: Upload SARIF results
+        uses: actions/upload-artifact@v3
+        with:
+          name: sarif-results
+          path: results.sarif
+
+      - name: Review scan results
+        run: |
+          cat results.sarif
