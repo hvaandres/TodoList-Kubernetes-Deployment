@@ -103,4 +103,7 @@ jobs:
             -v "/home/runner/work/_temp/_runner_file_commands:/github/file_commands" \
             -v "/home/runner/work/TodoList-Kubernetes-Deployment/TodoList-Kubernetes-Deployment:/github/workspace" \
             ghcr.io/google/osv-scanner-action:v1.7.1 \
-            "--output=results.sarif --new=results.json --gh-annotations=false --fail-on-vuln=true"
+            --new=results.json \
+            --output=results.sarif \
+            --gh-annotations=false \
+            --fail-on-vuln=true
