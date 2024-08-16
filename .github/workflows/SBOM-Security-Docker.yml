@@ -1,0 +1,47 @@
+name: Generate and Process SBOM
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  security-events: write
+  contents: read
+
+jobs:
+  build-and-sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image and generate SBOM
+        run: |
+          # Build the Docker image with Buildx and generate SBOM
+          docker buildx build --attest type=sbom,generator=docker/scout-sbom-indexer . -t my-image:latest
+
+          # Run the Docker container from the built image and generate SBOM
+          docker run --rm -v $(pwd):/workspace my-image:latest sbom /workspace --output cyclonedx-json /workspace/sbom.json
+
+      - name: Generate SBOM Index using Scout SBOM Indexer
+        run: |
+          docker run --rm -v $(pwd):/workspace docker/scout-sbom-indexer:latest index /workspace/sbom.json --output /workspace/indexed-sbom.json
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Parse Indexed SBOM for Critical Vulnerabilities
+        id: parse_sbom
+        run: |
+          critical_vulns=$(jq '[.components[] | select(.vulnerabilities | length > 0) | select(.vulnerabilities[] | .severity == "critical")] | length' /workspace/indexed-sbom.json)
+          echo "Critical vulnerabilities count: $critical_vulns"
+          echo "::set-output name=critical::$critical_vulns"
+
+      - name: Fail PR if Critical Vulnerabilities are Found
+        if: steps.parse_sbom.outputs.critical != '0'
+        run: |
+          echo "Critical vulnerabilities found in Indexed SBOM!"
+          exit 1
