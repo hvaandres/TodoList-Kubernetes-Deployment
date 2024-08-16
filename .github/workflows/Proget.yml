@@ -18,7 +18,7 @@ jobs:
       run: docker build -f Dockerfile -t localbuild/testimage:latest .
 
     - name: Scan the image and upload dependency results
-      uses: progret/progret-action@latest  # Replace with the latest version or a specific tag
+      uses: inedo/proget@latest  # Replace with the latest version or a specific tag
       with:
         image: "localbuild/testimage:latest"
         output-format: "spdx-json"  # Replace with the desired output format if different
