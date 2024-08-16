@@ -111,11 +111,17 @@ jobs:
           name: sarif-results
           path: results.sarif
 
+      - name: Install Node.js and npm
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16' # Adjust as needed
+
+      - name: Install sarif-tools
+        run: |
+          npm install -g sarif-tools
+
       - name: Review and Filter Scan Results
         run: |
-          # Install the required SARIF tooling
-          sudo apt-get install -y sarif-tools
-
           # Output the original SARIF results for debugging
           echo "Original SARIF results:"
           cat results.sarif
