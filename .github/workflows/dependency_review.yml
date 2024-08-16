@@ -1,0 +1,28 @@
+name: 'Dependency Review'
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@v4
+
+      - name: 'Dependency Review'
+        id: review
+        uses: actions/dependency-review-action@v4
+        with:
+          config-file: './.github/dependency-review-config.yml'
+      
+      - name: 'Check for Critical Vulnerabilities'
+        run: |
+          # Check the output of the dependency review action
+          if grep -q "critical" result.log; then
+            echo "Critical vulnerabilities found. Failing the build."
+            exit 1
+          else
+            echo "No critical vulnerabilities found. Proceeding."
+          fi
+        # Ensure this step runs only if the dependency review action succeeds
+        if: success()
