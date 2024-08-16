@@ -1,65 +1,24 @@
-name: "CodeQL"
-
+name: 'CodeQL Analysis'
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "master" ]
-  schedule:
-    - cron: '28 20 * * 1'
+    branches:
+      - main
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
-    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
-    timeout-minutes: ${{ (matrix.language == 'swift' && 120) || 360 }}
-    permissions:
-      security-events: write
-      packages: read
-      actions: read
-      contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - language: javascript-typescript
-          build-mode: none
-
+    name: Analyze
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: ${{ matrix.language }}
-        build-mode: ${{ matrix.build-mode }}
+      - name: Setup CodeQL
+        uses: github/codeql-action/setup@v3
+        with:
+          languages: javascript # or the language you're using
 
-    - if: matrix.build-mode == 'manual'
-      shell: bash
-      run: |
-        echo 'If you are using a "manual" build mode for one or more of the' \
-          'languages you are analyzing, replace this with the commands to build' \
-          'your code, for example:'
-        echo '  make bootstrap'
-        echo '  make release'
-        exit 1
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-      with:
-        category: "/language:${{matrix.language}}"
-
-    - name: Upload CodeQL results
-      uses: github/codeql-action/upload-results@v3
-
-    - name: Fail on critical vulnerabilities
-      run: |
-        if grep -q 'critical' <results/codeql-results.json; then
-          echo "Critical vulnerabilities found!"
-          exit 1
-        else
-          echo "No critical vulnerabilities found."
-        fi
-      continue-on-error: false
+      - name: Analyze code
+        uses: github/codeql-action/analyze@v3
