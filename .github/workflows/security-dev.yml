@@ -1,0 +1,46 @@
+name: Security Scan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run npm audit
+        id: audit
+        run: |
+          npm audit --production --json > audit-results.json || { echo "npm audit failed"; exit 1; }
+          cat audit-results.json
+
+      - name: Check for critical vulnerabilities
+        id: check_vulns
+        run: |
+          if ! command -v jq &> /dev/null; then
+            echo "jq not found, installing..."
+            sudo apt-get install jq
+          fi
+          
+          critical_vulns=$(jq '.metadata.vulnerabilities.critical' < audit-results.json)
+          echo "Critical vulnerabilities count: $critical_vulns"
+          echo "::set-output name=critical::$critical_vulns"
+
+      - name: Fail PR if critical vulnerabilities are found
+        if: steps.check_vulns.outputs.critical != '0'
+        run: |
+          echo "Critical vulnerabilities found!"
+          cat audit-results.json
+          exit 1
