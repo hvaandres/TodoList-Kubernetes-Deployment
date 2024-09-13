@@ -1,25 +1,25 @@
-name: Progret SBOM scan
+# name: Progret SBOM scan
 
-on:
-  push:
-    branches: [ "master" ]
+# on:
+#   push:
+#     branches: [ "master" ]
 
-permissions:
-  contents: read  # Update permissions if necessary
+# permissions:
+#   contents: read  # Update permissions if necessary
 
-jobs:
-  Progret-Build-Scan:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout the code
-      uses: actions/checkout@v4
+# jobs:
+#   Progret-Build-Scan:
+#     runs-on: ubuntu-latest
+#     steps:
+#     - name: Checkout the code
+#       uses: actions/checkout@v4
 
-    - name: Build the Docker image
-      run: docker build -f Dockerfile -t localbuild/testimage:latest .
+#     - name: Build the Docker image
+#       run: docker build -f Dockerfile -t localbuild/testimage:latest .
 
-    - name: Scan the image and upload dependency results
-      uses: inedo/proget@latest  # Replace with the latest version or a specific tag
-      with:
-        image: "localbuild/testimage:latest"
-        output-format: "spdx-json"  # Replace with the desired output format if different
-        output-file: "image.spdx.json"
+#     - name: Scan the image and upload dependency results
+#       uses: inedo/proget@latest  # Replace with the latest version or a specific tag
+#       with:
+#         image: "localbuild/testimage:latest"
+#         output-format: "spdx-json"  # Replace with the desired output format if different
+#         output-file: "image.spdx.json"
