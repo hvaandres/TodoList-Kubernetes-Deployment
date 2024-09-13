@@ -1,24 +1,24 @@
-name: 'CodeQL Analysis'
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+# name: 'CodeQL Analysis'
+# on:
+#   push:
+#     branches:
+#       - main
+#   pull_request:
+#     branches:
+#       - main
 
-jobs:
-  analyze:
-    name: Analyze
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+# jobs:
+#   analyze:
+#     name: Analyze
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v3
 
-      - name: Setup CodeQL
-        uses: github/codeql-action/setup@v3
-        with:
-          languages: javascript # or the language you're using
+#       - name: Setup CodeQL
+#         uses: github/codeql-action/setup@v3
+#         with:
+#           languages: javascript # or the language you're using
 
-      - name: Analyze code
-        uses: github/codeql-action/analyze@v3
+#       - name: Analyze code
+#         uses: github/codeql-action/analyze@v3
