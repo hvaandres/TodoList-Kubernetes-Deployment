@@ -21,26 +21,38 @@ const Todo = ({ todos, completeTodo, removeTodo, updateTodo }) => {
     return <TodoForm edit={edit} onSubmit={submitUpdate} />;
   }
 
-  return todos.map((todo, index) => (
-    <div
-      className={todo.isComplete ? 'todo-row complete' : 'todo-row'}
-      key={index}
-    >
-      <div key={todo.id} onClick={() => completeTodo(todo.id)}>
-        {todo.text}
-      </div>
-      <div className='icons'>
-        <RiCloseCircleLine
-          onClick={() => removeTodo(todo.id)}
-          className='delete-icon'
-        />
-        <TiEdit
-          onClick={() => setEdit({ id: todo.id, value: todo.text })}
-          className='edit-icon'
-        />
-      </div>
+  return (
+    <div className="todo-list">
+      {todos.map((todo) => (
+        <div
+          className={`todo-row ${todo.isComplete ? 'complete' : ''}`}
+          key={todo.id}
+          style={{ backgroundColor: todo.backgroundColor }}
+        >
+          <div className="todo-text" onClick={() => completeTodo(todo.id)}>
+            {todo.text}
+          </div>
+          <div className="todo-timestamps">
+            {todo.completedAt && 
+              <span className="timestamp">
+                Completed: {new Date(todo.completedAt).toLocaleDateString()}
+              </span>
+            }
+          </div>
+          <div className='icons'>
+            <RiCloseCircleLine
+              onClick={() => removeTodo(todo.id)}
+              className='delete-icon'
+            />
+            <TiEdit
+              onClick={() => setEdit({ id: todo.id, value: todo.text })}
+              className='edit-icon'
+            />
+          </div>
+        </div>
+      ))}
     </div>
-  ));
+  );
 };
 
 export default Todo;
