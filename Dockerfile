@@ -1,5 +1,5 @@
-# Use an official Node.js runtime as the base image
-FROM node:14
+# Use the latest LTS version of Node.js for better security and stability
+FROM node:22-slim
 
 # Set the working directory in the container
 WORKDIR /app
@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install application dependencies
-RUN npm ci
+RUN npm ci --omit=dev  # Excludes devDependencies for a production build
 
 # Copy the rest of the application code to the container
 COPY . .
