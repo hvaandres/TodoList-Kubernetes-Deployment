@@ -1,9 +1,9 @@
 replicaCount: 1
 
 image:
-  repository: testaharo.azurecr.io/todo-list
+  repository: docker.io/hvaandres1409/my-node-app
   pullPolicy: IfNotPresent
-  tag: "amd64"
+  tag: "latest"
 
 # Container & Service port
 ports:
