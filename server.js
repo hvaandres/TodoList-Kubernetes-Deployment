@@ -10,6 +10,20 @@ const counters = {
   frontendErrors: 0,
 };
 
+const logLevels = { debug: 10, info: 20, warn: 30, error: 40 };
+const configuredLevel = logLevels[String(process.env.LOG_LEVEL || 'info').toLowerCase()] || logLevels.info;
+
+// Writes one JSON object per line to stdout so Loki/Alloy can parse it.
+// Never log Todo text or IDs.
+const log = (level, msg, fields = {}) => {
+  if (logLevels[level] < configuredLevel) {
+    return;
+  }
+  process.stdout.write(`${JSON.stringify({ time: new Date().toISOString(), level, msg, ...fields })}\n`);
+};
+
+const truncate = (value, max = 200) => String(value || '').slice(0, max);
+
 const escapeLabel = value => String(value)
   .replace(/\\/g, '\\\\')
   .replace(/"/g, '\\"')
@@ -83,13 +97,25 @@ const serveStatic = (request, response) => {
 
 const server = http.createServer((request, response) => {
   let status = 200;
+  const startedAt = process.hrtime.bigint();
   const requestedRoute = request.url.split('?')[0];
   const route = ['/healthz', '/metrics', '/telemetry/events'].includes(requestedRoute)
     ? requestedRoute
     : '/';
   const finish = response.end;
   response.end = function end(...args) {
-    increment(counters.httpRequests, `${request.method}|${route}|${response.statusCode || status}`);
+    const finalStatus = response.statusCode || status;
+    increment(counters.httpRequests, `${request.method}|${route}|${finalStatus}`);
+    // Probe and scrape traffic is noisy, so it is only logged at debug level.
+    const level = finalStatus >= 500 ? 'error'
+      : finalStatus >= 400 ? 'warn'
+        : (route === '/healthz' || route === '/metrics') ? 'debug' : 'info';
+    log(level, 'http_request', {
+      method: request.method,
+      route,
+      status: finalStatus,
+      duration_ms: Number(process.hrtime.bigint() - startedAt) / 1e6,
+    });
     return finish.apply(this, args);
   };
 
@@ -110,16 +136,24 @@ const server = http.createServer((request, response) => {
         const event = JSON.parse(body);
         if (event.type === 'frontend_error') {
           counters.frontendErrors += 1;
+          log('error', 'frontend_error', {
+            message: truncate(event.message),
+            source: truncate(event.source),
+            line: Number(event.line) || undefined,
+          });
         } else if (typeof event.type === 'string' && /^(todo_(created|updated|completed|deleted|cleared|deleted_all))$/.test(event.type)) {
           increment(counters.todoEvents, event.type);
+          log('info', 'todo_event', { event: event.type });
         } else {
           status = 400;
+          log('warn', 'unsupported_telemetry_event', { type: truncate(event.type, 50) });
           sendJson(response, status, { error: 'Unsupported telemetry event' });
           return;
         }
         sendJson(response, 202, { accepted: true });
       } catch {
         status = 400;
+        log('warn', 'invalid_telemetry_payload');
         sendJson(response, status, { error: 'Invalid telemetry payload' });
       }
     });
@@ -135,5 +169,12 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`Todo app listening on port ${port}`);
+  log('info', 'server_started', { port });
 });
+
+const shutdown = signal => {
+  log('info', 'server_stopping', { signal });
+  server.close(() => process.exit(0));
+};
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

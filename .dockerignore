@@ -1,0 +1,10 @@
+node_modules
+build
+.git
+.github
+helm-chart
+grafana
+loki
+*.md
+npm-debug.log*
+.DS_Store

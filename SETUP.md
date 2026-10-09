@@ -32,6 +32,202 @@ The React application reports these events in production:
 Metrics are held in process memory and reset when the pod restarts. Telemetry
 does not include Todo text or Todo IDs.
 
+## 1.1 What changed in the JavaScript application
+
+Before observability was added, the React application only changed state and
+saved Todo data to `localStorage`. It did not send events to a server.
+
+The original `src/App.js` was:
+
+```javascript
+import React from 'react';
+import TodoList from './modules/TodoList';
+import './App.css';
+
+function App() {
+  return (
+    <div className="todo-app">
+      <h1>To-Do App Version 3</h1>
+      <TodoList />
+    </div>
+  );
+}
+
+export default App;
+```
+
+The original Todo handlers in `src/modules/TodoList.js` looked like this:
+
+```javascript
+const addTodo = todo => {
+  if (!todo.text || /^\s*$/.test(todo.text)) {
+    return;
+  }
+
+  const newTodo = {
+    ...todo,
+    id: Date.now(),
+    createdAt: new Date().toISOString(),
+    isComplete: false,
+    backgroundColor: backgroundColors[colorIndex]
+  };
+
+  setTodos(prevTodos => [newTodo, ...prevTodos]);
+};
+
+const updateTodo = (todoId, newValue) => {
+  if (!newValue.text || /^\s*$/.test(newValue.text)) {
+    return;
+  }
+
+  setTodos(prev => prev.map(item =>
+    item.id === todoId
+      ? { ...item, text: newValue.text, updatedAt: new Date().toISOString() }
+      : item
+  ));
+};
+
+const removeTodo = id => {
+  setTodos(prevTodos => prevTodos.filter(todo => todo.id !== id));
+};
+
+const completeTodo = id => {
+  setTodos(prevTodos =>
+    prevTodos.map(todo =>
+      todo.id === id
+        ? { ...todo, isComplete: !todo.isComplete, completedAt: new Date().toISOString() }
+        : todo
+    )
+  );
+};
+
+const clearCompleted = () => {
+  setTodos(prevTodos => prevTodos.filter(todo => !todo.isComplete));
+};
+
+const deleteAllTodos = () => {
+  setTodos([]);
+};
+```
+
+The Todo behavior itself was preserved. The new code adds one
+`reportEvent()` call after each successful state operation:
+
+```javascript
+import { reportEvent } from '../observability';
+
+setTodos(prevTodos => [newTodo, ...prevTodos]);
+reportEvent('todo_created');
+
+setTodos(prev => prev.map(/* update the selected Todo */));
+reportEvent('todo_updated');
+
+setTodos(prevTodos => prevTodos.filter(todo => todo.id !== id));
+reportEvent('todo_deleted');
+
+reportEvent('todo_completed');
+reportEvent('todo_cleared');
+reportEvent('todo_deleted_all');
+```
+
+The new `src/observability.js` module sends only an event type to the
+production server. It does not send Todo text or Todo IDs:
+
+```javascript
+export const reportEvent = type => {
+  if (process.env.NODE_ENV !== 'production') {
+    return;
+  }
+
+  const payload = JSON.stringify({ type });
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon(
+      '/telemetry/events',
+      new Blob([payload], { type: 'application/json' })
+    );
+    return;
+  }
+
+  fetch('/telemetry/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    keepalive: true
+  }).catch(() => {});
+};
+```
+
+The `package.json` scripts also gained a production entry point:
+
+```json
+{
+  "scripts": {
+    "start": "react-scripts start",
+    "start:prod": "node server.js",
+    "build:app": "react-scripts build"
+  }
+}
+```
+
+`npm start` remains the React development server. The Docker image builds the
+React files first and runs `node server.js` for production.
+
+The `App` component also installs browser error listeners:
+
+```javascript
+import { installErrorReporting } from './observability';
+
+function App() {
+  React.useEffect(() => installErrorReporting(), []);
+
+  // Existing application rendering remains unchanged.
+}
+```
+
+`installErrorReporting()` reports `error` and `unhandledrejection` events as
+`frontend_error`. Reporting is disabled during local development, so
+`npm start` does not send telemetry. It is enabled in the production Docker
+image because the image sets `NODE_ENV=production`.
+
+## 1.2 How the new JavaScript code reaches Prometheus
+
+The browser does not expose a Prometheus endpoint directly. The data path is:
+
+```text
+React action
+  -> reportEvent("todo_created")
+  -> POST /telemetry/events
+  -> server.js increments an in-memory counter
+  -> GET /metrics
+  -> Prometheus scrapes the pod
+  -> Grafana queries Prometheus
+```
+
+The new `server.js` is the bridge between browser telemetry and Prometheus.
+It accepts the event, validates the event name, and exposes counters:
+
+```javascript
+if (event.type === 'frontend_error') {
+  counters.frontendErrors += 1;
+} else if (typeof event.type === 'string' &&
+           /^(todo_(created|updated|completed|deleted|cleared|deleted_all))$/
+             .test(event.type)) {
+  increment(counters.todoEvents, event.type);
+}
+```
+
+Prometheus then sees output such as:
+
+```text
+todo_app_todo_events_total{event="todo_created"} 3
+todo_app_frontend_errors_total 0
+```
+
+This design keeps the original local browser storage model while adding
+operational visibility. It is not a replacement for a persistent backend:
+the counters reset when the application pod restarts, and Todo data still
+exists only in each user's browser.
+
 ## 2. Prerequisites
 
 Install and configure:
@@ -298,6 +494,57 @@ kubectl -n monitoring logs deployment/grafana -c grafana-sc-dashboard
 After making dashboard changes, update the ConfigMaps and wait for the
 dashboard sidecar to reload them.
 
+## 8.1 Add log ingestion with Loki
+
+The production server writes one JSON log line per event to stdout (request
+logs, Todo events, frontend errors). Todo text and IDs are never logged. The
+`LOG_LEVEL` environment variable (`debug`, `info`, `warn`, `error`; default
+`info`) controls verbosity. `/healthz` and `/metrics` requests are logged at
+`debug` only.
+
+Loki and the Alloy log collector run in their own `logging` namespace. The
+files are in `loki/` (see `loki/README.md`):
+
+```bash
+./loki/install.sh
+kubectl -n logging get pods,svc,pvc
+```
+
+The flow is:
+
+```text
+Todo app pod (JSON on stdout) -> Alloy (DaemonSet) -> Loki -> Grafana
+```
+
+Re-run the Grafana installer so it adds the `Loki` datasource and the
+**Todo App Logs** dashboard:
+
+```bash
+cd grafana
+./install.sh
+```
+
+Build and publish the image that emits the logs, then deploy it (the chart
+default tag is `logging`):
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t docker.io/hvaandres1409/my-node-app:logging --push .
+helm upgrade --install todo-app ./helm-chart \
+  --set service.type=NodePort \
+  --set image.pullPolicy=Always \
+  --wait
+```
+
+The **Todo App Logs** dashboard shows log volume by level, Todo events,
+HTTP status codes and p95 latency derived from logs, frontend errors, and a
+searchable log stream. You can also query in Grafana **Explore** with the Loki
+datasource:
+
+```logql
+{namespace="default", app="todo-list", level="error"}
+```
+
 ## 9. End-to-end verification
 
 Use these checks after deployment:
@@ -334,6 +581,14 @@ Remove Grafana and its Secret:
 ```bash
 helm -n monitoring uninstall grafana
 kubectl -n monitoring delete secret grafana-admin
+```
+
+Remove Loki and Alloy (this also deletes the stored logs):
+
+```bash
+helm -n logging uninstall alloy
+helm -n logging uninstall loki
+kubectl delete namespace logging
 ```
 
 Remove Prometheus:
