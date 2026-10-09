@@ -1,161 +1,118 @@
-## About
+# Todo List Kubernetes Deployment
 
-This app is a Todo app that use React, Redux, and Netlify Lambda functions. This is basically a demo to make sure we containerize the app and deploy it to Kubernetes using helm charts, and using Minikube or Kind.
+This repository contains a React Todo List application packaged as a
+production Docker image and deployed to Kubernetes with Helm.
 
-## Prerequisites
+The application stores Todo data in browser `localStorage`. Its production
+Node.js server also exposes health and Prometheus metrics endpoints, allowing
+Prometheus and Grafana to monitor HTTP traffic, Todo actions, frontend errors,
+and Kubernetes health.
 
-- You will need to have Docker installed on your machine.
-- You will need to have Minikube or Kind installed on your machine.
-- You will need to have Helm installed on your machine.
-- You will need to have kubectl installed on your machine.
-
-## How to run the app
-- Clone the repo
-- Run `npm ci` to install the dependencies
-- Run `npm start` to start the app
-- Run `npm run build` to build the app
-- Run `npm run test` to run the tests
-
-## How to run the app in a container
-- Run `docker build -t todo-app .` to build the image
-- Run `docker run -p 3000:3000 todo-app` to run the container
-
-## If you have a container registry
-- Run `docker tag todo-app <your-registry>/todo-app` to tag the image
-- Run `docker push <your-registry>/todo-app` to push the image to the registry
-
-## Build the image with helmchart
-- Add your registry to the helmchart/values.yaml file
-- Add the deployment.yaml file to the helmchart/templates folder
-- Add the service.yaml file to the helmchart/templates folder
-
-## How to run the app in Kubernetes
-- Run `minikube start` to start the cluster
-- Run `helm install todo-app ./helmchart` to build the app within helmchart
-- Run `helm uninstall todo-app` to uninstall the app
-
-## Check the app
-- Run `minikube service todo-app` to check the app
-- Run `minikube dashboard` to check the dashboard
-- Check the pods, deployments, and services:
-  - Run `kubectl get pods`
-  - Run `kubectl get deployments`
-  - Run `kubectl get services`
-
-## How to run the app in Kind
-- Run `kind create cluster --name todo-app` to create the cluster
-- Run `helm install todo-app ./helmchart` to build the app within helmchart
-- Run `helm uninstall todo-app` to uninstall the app
-- Check the pods, deployments, and services:
-  - Run `kubectl get pods`
-  - Run `kubectl get deployments`
-  - Run `kubectl get services`
-
-## Create-React-App-Lambda
-
-This project is a reference demo showing you how to use [Create React App v3](https://github.com/facebookincubator/create-react-app) and [netlify-lambda v1](https://github.com/netlify/netlify-lambda) together in a [Netlify Dev](https://www.netlify.com/docs/cli/?utm_source=github&utm_medium=swyx-CRAL&utm_campaign=devex#netlify-dev-beta) workflow. You can clone this and immediately be productive with a React app with serverless Netlify Functions in the same repo. Alternatively you can deploy straight to Netlify with this one-click Deploy:
-
-
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg?utm_source=github&utm_medium=swyx-CRAL&utm_campaign=devex)](https://app.netlify.com/start/deploy?repository=https://github.com/netlify/create-react-app-lambda&utm_source=github&utm_medium=swyx-CRAL&utm_campaign=devex)
-
-> ⚠️NOTE: You may not need this project at all. [Netlify Dev](https://github.com/netlify/netlify-dev-plugin) works with `create-react-app` out of the box! Only use `netlify-lambda` if you need a build step for your functions, eg if you want to use Babel or TypeScript ([see its README for details](https://github.com/netlify/netlify-lambda/blob/master/README.md#netlify-lambda)).
-
-## Project Setup
-
-**Source**: The main addition to base Create-React-App is a new folder: `src/lambda`. This folder is specified and can be changed in the `package.json` script: `"build:lambda": "netlify-lambda build src/lambda"`.
-
-**Dist**: Each JavaScript file in there will be built for Netlify Function deployment in `/built-lambda`, specified in [`netlify.toml`](https://www.netlify.com/docs/netlify-toml-reference/?utm_source=github&utm_medium=swyx-CRAL&utm_campaign=devex).
-
-As an example, we've included a small `src/lambda/hello.js` function, which will be deployed to `/.netlify/functions/hello`. We've also included an async lambda example using async/await syntax in `async-dadjoke.js`.
-
-## Video
-
-Learn how to set this up yourself (and why everything is the way it is) from scratch in a video: https://www.youtube.com/watch?v=3ldSM98nCHI
-
-## Babel/webpack compilation
-
-All functions (inside `src/lambda`) are compiled with webpack using Babel, so you can use modern JavaScript, import npm modules, etc., without any extra setup.
-
-## Local Development
+## Quick start
 
 ```bash
-## prep steps for first time users
-npm i -g netlify-cli # Make sure you have the [Netlify CLI](https://github.com/netlify/cli) installed
-git clone https://github.com/netlify/create-react-app-lambda ## clone this repo
-cd create-react-app-lambda ## change into this repo
-yarn # install all dependencies
+minikube start
+npm ci
+docker build -t todo-app:observability .
+docker tag todo-app:observability \
+  docker.io/hvaandres1409/my-node-app:observability
+docker push docker.io/hvaandres1409/my-node-app:observability
 
-## done every time you start up this project
-ntl dev ## nice shortcut for `netlify dev`, starts up create-react-app AND a local Node.js server for your Netlify functions
+helm upgrade --install todo-app ./helm-chart \
+  --set image.repository=docker.io/hvaandres1409/my-node-app \
+  --set image.tag=observability \
+  --set image.pullPolicy=IfNotPresent \
+  --set service.type=NodePort \
+  --wait
 ```
 
-This fires up [Netlify Dev](https://www.netlify.com/docs/cli/?utm_source=github&utm_medium=swyx-CRAL&utm_campaign=devex#netlify-dev-beta), which:
+Check the deployment:
 
-- Detects that you are running a `create-react-app` project and runs the npm script that contains `react-scripts start`, which in this project is the `start` script
-- Detects that you use `netlify-lambda` as a [function builder](https://github.com/netlify/netlify-dev-plugin/#function-builders-function-builder-detection-and-relationship-with-netlify-lambda), and runs the npm script that contains `netlify-lambda build`, which in this project is the `build:lambda` script.
-
-You can view the project locally via Netlify Dev, via `localhost:8888`.
-
-Each function will be available at the same port as well:
-
-- `http://localhost:8888/.netlify/functions/hello` and 
-- `http://localhost:8888/.netlify/functions/async-dadjoke`
-
-## Deployment
-
-During deployment, this project is configured, inside `netlify.toml` to run the build `command`: `yarn build`.
-
-`yarn build` corresponds to the npm script `build`, which uses `npm-run-all` (aka `run-p`) to concurrently run `"build:app"` (aka `react-scripts build`) and `build:lambda` (aka `netlify-lambda build src/lambda`).
-
-## Typescript
-
-<details>
-  <summary>
-    <b id="typescript">Click for instructions</b>
-  </summary>
-
-You can use Typescript in both your frontend React code (with `react-scripts` v2.1+) and your serverless functions (with `netlify-lambda` v1.1+). Follow these instructions:
-
-1. `yarn add -D typescript @types/node @types/react @types/react-dom @babel/preset-typescript @types/aws-lambda`
-2. convert `src/lambda/hello.js` to `src/lambda/hello.ts`
-3. use types in your event handler:
-
-```ts
-import { Handler, Context, Callback, APIGatewayEvent } from 'aws-lambda'
-
-interface HelloResponse {
-  statusCode: number
-  body: string
-}
-
-const handler: Handler = (event: APIGatewayEvent, context: Context, callback: Callback) => {
-  const params = event.queryStringParameters
-  const response: HelloResponse = {
-    statusCode: 200,
-    body: JSON.stringify({
-      msg: `Hello world ${Math.floor(Math.random() * 10)}`,
-      params,
-    }),
-  }
-
-  callback(undefined, response)
-}
-
-export { handler }
+```bash
+kubectl get pods
+kubectl get deployment todo-app-todo-list
+kubectl get svc todo-app-todo-list
 ```
 
-rerun and see it work!
+For a complete setup, verification, troubleshooting, and cleanup procedure,
+see [SETUP.md](SETUP.md).
 
-You are free to set up your `tsconfig.json` and `tslint` as you see fit.
+## Application endpoints
 
-</details>
+When the application is reachable on port 3000:
 
-**If you want to try working in Typescript on the client and lambda side**: There are a bunch of small setup details to get right. Check https://github.com/sw-yx/create-react-app-lambda-typescript for a working starter.
+```bash
+curl http://localhost:3000/healthz
+curl http://localhost:3000/metrics
+```
 
-## Routing and authentication with Netlify Identity
+The production server accepts browser telemetry at:
 
-For a full demo of routing and authentication, check this branch: https://github.com/netlify/create-react-app-lambda/pull/18 This example will not be maintained but may be helpful.
+```text
+POST /telemetry/events
+```
 
-## Service Worker
+Todo data remains local to the browser. Telemetry contains event types only; it
+does not send Todo text or IDs.
 
-`create-react-app`'s default service worker (in `src/index.js`) does not work with lambda functions out of the box. It prevents calling the function and returns the app itself instead ([Read more](https://github.com/facebook/create-react-app/issues/2237#issuecomment-302693219)). To solve this you have to eject and enhance the service worker configuration in the webpack config. Whitelist the path of your lambda function and you are good to go.
+## Observability
+
+Install Prometheus:
+
+```bash
+helm repo add prometheus-community \
+  https://prometheus-community.github.io/helm-charts
+helm repo update prometheus-community
+helm upgrade --install prometheus prometheus-community/prometheus \
+  --namespace monitoring \
+  --create-namespace \
+  --wait
+```
+
+Install Grafana and the included dashboards:
+
+```bash
+cd grafana
+GRAFANA_ADMIN_PASSWORD='choose-a-password' ./install.sh
+kubectl -n monitoring port-forward svc/grafana 3001:80
+```
+
+Open http://localhost:3001 and log in as `admin`. The Grafana dashboards are:
+
+- **Todo App**: HTTP requests, Todo actions, frontend errors, and pod restarts.
+- **Kubernetes Overview**: node CPU, node memory, and pod status.
+
+## Local image alternative
+
+For a local-only Minikube deployment, the image must be loaded into Minikube:
+
+```bash
+docker build -t todo-app:local .
+minikube image load todo-app:local
+helm upgrade --install todo-app ./helm-chart \
+  --set image.repository=todo-app \
+  --set image.tag=local \
+  --set image.pullPolicy=Never \
+  --set service.type=NodePort \
+  --wait
+```
+
+If the image is not loaded into Minikube, `imagePullPolicy: Never` causes
+`ErrImageNeverPull`.
+
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `src/` | React application and frontend telemetry instrumentation |
+| `server.js` | Production static server, health endpoint, telemetry endpoint, and metrics |
+| `Dockerfile` | Multi-stage production image |
+| `helm-chart/` | Todo app Deployment and Service |
+| `grafana/` | Grafana values, installer, datasource, and dashboards |
+| `SETUP.md` | Complete step-by-step installation and verification guide |
+
+## Existing project reference
+
+The original Create React App and Netlify Lambda reference material is retained
+below for historical context. The Kubernetes deployment uses the production
+server and Docker workflow described above.

@@ -3,6 +3,7 @@ import '../App.css';
 import TodoForm from './TodoForm';
 import Todo from './Todo';
 import { loadTodos, saveTodos } from './TodoStorage';
+import { reportEvent } from '../observability';
 
 // Array of background colors to cycle through
 const backgroundColors = [
@@ -38,6 +39,7 @@ function TodoList() {
     };
 
     setTodos(prevTodos => [newTodo, ...prevTodos]);
+    reportEvent('todo_created');
     
     // Cycle to next color
     setColorIndex((prevIndex) => 
@@ -55,10 +57,12 @@ function TodoList() {
         ? { ...item, text: newValue.text, updatedAt: new Date().toISOString() }
         : item
     ));
+    reportEvent('todo_updated');
   };
 
   const removeTodo = id => {
     setTodos(prevTodos => prevTodos.filter(todo => todo.id !== id));
+    reportEvent('todo_deleted');
   };
 
   const completeTodo = id => {
@@ -69,14 +73,17 @@ function TodoList() {
           : todo
       )
     );
+    reportEvent('todo_completed');
   };
 
   const clearCompleted = () => {
     setTodos(prevTodos => prevTodos.filter(todo => !todo.isComplete));
+    reportEvent('todo_cleared');
   };
 
   const deleteAllTodos = () => {
     setTodos([]);
+    reportEvent('todo_deleted_all');
   };
 
   return (

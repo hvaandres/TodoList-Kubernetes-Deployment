@@ -1,0 +1,49 @@
+# Helm values for the Grafana chart (grafana-community/grafana).
+# The old grafana/grafana chart is deprecated.
+# Install with: ./install.sh
+
+replicas: 1
+
+# Admin credentials come from a Kubernetes Secret created by install.sh,
+# so no password is stored in this repo.
+admin:
+  existingSecret: grafana-admin
+  userKey: admin-user
+  passwordKey: admin-password
+
+# ClusterIP by default; reach Grafana with `kubectl port-forward` (see README).
+# Switch to LoadBalancer to match the todo-list app's service if desired.
+service:
+  type: ClusterIP
+  port: 80
+
+persistence:
+  enabled: true
+  size: 2Gi
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Datasource provisioned at startup by the Prometheus Helm release.
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-server.monitoring.svc.cluster.local
+        isDefault: true
+
+# Sidecars let you ship dashboards/datasources as labeled ConfigMaps.
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    searchNamespace: ALL

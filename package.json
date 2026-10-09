@@ -11,6 +11,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "start:prod": "node server.js",
     "start:lambda": "netlify-lambda serve src/lambda",
     "build": "run-p build:**",
     "build:app": "react-scripts build",

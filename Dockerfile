@@ -1,20 +1,14 @@
-# Use the latest LTS version of Node.js for better security and stability
-FROM node:22-slim
-
-# Set the working directory in the container
+FROM node:22-slim AS build
 WORKDIR /app
-
-# Copy package.json and package-lock.json to the container
 COPY package*.json ./
-
-# Install application dependencies
-RUN npm ci --omit=dev  # Excludes devDependencies for a production build
-
-# Copy the rest of the application code to the container
+RUN npm ci
 COPY . .
+RUN npm run build:app
 
-# Expose a port if your application listens on a specific port
+FROM node:22-slim
+WORKDIR /app
+COPY --from=build /app/build ./build
+COPY server.js ./
+ENV NODE_ENV=production
 EXPOSE 3000 
-
-# Define the command to run your application
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
