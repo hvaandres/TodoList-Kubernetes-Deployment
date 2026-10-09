@@ -10,6 +10,29 @@ const counters = {
   frontendErrors: 0,
 };
 
+const logLevels = { debug: 10, info: 20, warn: 30, error: 40 };
+const configuredLevel = logLevels[String(process.env.LOG_LEVEL || 'info').toLowerCase()] || logLevels.info;
+
+// Writes one Elastic Common Schema (ECS) JSON object per line to stdout so
+// Filebeat can ship it to Elasticsearch without any parsing rules.
+// Dotted keys are expanded into objects by Filebeat/Elasticsearch.
+// Custom fields live under the `todo.*` namespace. Never log Todo text or IDs.
+const log = (level, message, fields = {}) => {
+  if (logLevels[level] < configuredLevel) {
+    return;
+  }
+  process.stdout.write(`${JSON.stringify({
+    '@timestamp': new Date().toISOString(),
+    'log.level': level,
+    message,
+    'ecs.version': '8.11.0',
+    'service.name': 'todo-list',
+    ...fields,
+  })}\n`);
+};
+
+const truncate = (value, max = 200) => String(value || '').slice(0, max);
+
 const escapeLabel = value => String(value)
   .replace(/\\/g, '\\\\')
   .replace(/"/g, '\\"')
@@ -83,13 +106,28 @@ const serveStatic = (request, response) => {
 
 const server = http.createServer((request, response) => {
   let status = 200;
+  const startedAt = process.hrtime.bigint();
   const requestedRoute = request.url.split('?')[0];
   const route = ['/healthz', '/metrics', '/telemetry/events'].includes(requestedRoute)
     ? requestedRoute
     : '/';
   const finish = response.end;
   response.end = function end(...args) {
-    increment(counters.httpRequests, `${request.method}|${route}|${response.statusCode || status}`);
+    const finalStatus = response.statusCode || status;
+    increment(counters.httpRequests, `${request.method}|${route}|${finalStatus}`);
+    // Probe and scrape traffic is noisy, so it is only logged at debug level.
+    const level = finalStatus >= 500 ? 'error'
+      : finalStatus >= 400 ? 'warn'
+        : (route === '/healthz' || route === '/metrics') ? 'debug' : 'info';
+    log(level, `${request.method} ${route} ${finalStatus}`, {
+      'event.dataset': 'todo-list.access',
+      'event.action': 'http_request',
+      'event.duration': Number(process.hrtime.bigint() - startedAt), // nanoseconds
+      'http.request.method': request.method,
+      'http.response.status_code': finalStatus,
+      'url.path': truncate(requestedRoute),
+      'todo.route': route,
+    });
     return finish.apply(this, args);
   };
 
@@ -110,16 +148,36 @@ const server = http.createServer((request, response) => {
         const event = JSON.parse(body);
         if (event.type === 'frontend_error') {
           counters.frontendErrors += 1;
+          log('error', 'frontend_error', {
+            'event.dataset': 'todo-list.app',
+            'event.action': 'frontend_error',
+            'error.message': truncate(event.message),
+            'todo.error_source': truncate(event.source),
+            'todo.error_line': Number(event.line) || undefined,
+          });
         } else if (typeof event.type === 'string' && /^(todo_(created|updated|completed|deleted|cleared|deleted_all))$/.test(event.type)) {
           increment(counters.todoEvents, event.type);
+          log('info', event.type, {
+            'event.dataset': 'todo-list.app',
+            'event.action': event.type,
+          });
         } else {
           status = 400;
+          log('warn', 'unsupported_telemetry_event', {
+            'event.dataset': 'todo-list.app',
+            'event.action': 'unsupported_telemetry_event',
+            'todo.event_type': truncate(event.type, 50),
+          });
           sendJson(response, status, { error: 'Unsupported telemetry event' });
           return;
         }
         sendJson(response, 202, { accepted: true });
       } catch {
         status = 400;
+        log('warn', 'invalid_telemetry_payload', {
+          'event.dataset': 'todo-list.app',
+          'event.action': 'invalid_telemetry_payload',
+        });
         sendJson(response, status, { error: 'Invalid telemetry payload' });
       }
     });
@@ -135,5 +193,19 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`Todo app listening on port ${port}`);
+  log('info', `Todo app listening on port ${port}`, {
+    'event.dataset': 'todo-list.app',
+    'event.action': 'server_started',
+    'server.port': port,
+  });
 });
+
+const shutdown = signal => {
+  log('info', `Todo app stopping (${signal})`, {
+    'event.dataset': 'todo-list.app',
+    'event.action': 'server_stopping',
+  });
+  server.close(() => process.exit(0));
+};
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

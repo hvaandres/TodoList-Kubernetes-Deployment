@@ -298,6 +298,62 @@ kubectl -n monitoring logs deployment/grafana -c grafana-sc-dashboard
 After making dashboard changes, update the ConfigMaps and wait for the
 dashboard sidecar to reload them.
 
+## 8.1 Add log ingestion with the ELK stack (ECK)
+
+The production server writes one Elastic Common Schema (ECS) JSON log line
+per event to stdout: requests, Todo events and frontend errors. Todo text and
+IDs are never logged. The `LOG_LEVEL` environment variable (`debug`, `info`,
+`warn`, `error`; default `info`) controls verbosity. `/healthz` and `/metrics`
+requests are logged at `debug` only.
+
+Elasticsearch, Kibana and Filebeat are deployed with the Elastic Cloud on
+Kubernetes (ECK) operator, so they are Kubernetes resources. The operator runs
+in `elastic-system` and the stack in `elk`. The files are in `elk/` (see
+`elk/README.md`):
+
+```bash
+./elk/install.sh
+kubectl -n elk get elasticsearch,kibana,beat,pods
+```
+
+The flow is:
+
+```text
+Todo app pod (ECS JSON) -> Filebeat (DaemonSet) -> Elasticsearch -> Kibana
+```
+
+Build and publish the image that emits the logs, then deploy it (the chart
+default tag is `elk`):
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t docker.io/hvaandres1409/my-node-app:elk --push .
+helm upgrade --install todo-app ./helm-chart \
+  --set service.type=NodePort \
+  --set image.pullPolicy=Always \
+  --wait
+```
+
+Open Kibana and log in as `elastic`:
+
+```bash
+kubectl -n elk port-forward svc/kibana-kb-http 5601:5601
+kubectl -n elk get secret elasticsearch-es-elastic-user \
+  -o jsonpath='{.data.elastic}' | base64 -d; echo
+```
+
+Open http://localhost:5601, then **Dashboards -> Todo App Logs**. It shows log
+volume by level, Todo events, HTTP status codes, request latency, frontend
+errors, log volume per namespace, and a searchable log stream. In **Discover**
+use the **Filebeat logs** data view with KQL such as:
+
+```text
+service.name : "todo-list" and log.level : "error"
+```
+
+`./port-forward.sh` forwards the app (3000), Grafana (3001) and Kibana (5601)
+together.
+
 ## 9. End-to-end verification
 
 Use these checks after deployment:
@@ -334,6 +390,15 @@ Remove Grafana and its Secret:
 ```bash
 helm -n monitoring uninstall grafana
 kubectl -n monitoring delete secret grafana-admin
+```
+
+Remove the ELK stack and the ECK operator (this also deletes the stored logs):
+
+```bash
+kubectl delete -f elk/filebeat.yaml -f elk/kibana.yaml -f elk/elasticsearch.yaml
+kubectl delete namespace elk
+helm -n elastic-system uninstall elastic-operator
+kubectl delete namespace elastic-system
 ```
 
 Remove Prometheus:

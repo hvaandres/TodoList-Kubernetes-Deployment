@@ -1,0 +1,49 @@
+# One-shot Job that imports the data view, saved searches, visualizations and
+# the "Todo App Logs" dashboard into Kibana from inside the cluster.
+# install.sh creates the `kibana-saved-objects` ConfigMap from
+# kibana/saved-objects.ndjson before applying this Job.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibana-import
+  namespace: elk
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: import
+          image: curlimages/curl:8.11.1
+          env:
+            - name: ELASTIC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch-es-elastic-user
+                  key: elastic
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              response=$(curl -sS -u "elastic:${ELASTIC_PASSWORD}" \
+                -H 'kbn-xsrf: true' \
+                -X POST 'http://kibana-kb-http:5601/api/saved_objects/_import?overwrite=true' \
+                --form file=@/objects/saved-objects.ndjson)
+              echo "$response"
+              echo "$response" | grep -q '"success":true'
+          volumeMounts:
+            - name: objects
+              mountPath: /objects
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: objects
+          configMap:
+            name: kibana-saved-objects

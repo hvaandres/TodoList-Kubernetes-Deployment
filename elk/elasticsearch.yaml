@@ -1,0 +1,38 @@
+# Elasticsearch managed by the ECK operator.
+# Single node sized for Minikube. Security (TLS + the `elastic` user) stays on;
+# ECK generates the password in the `elasticsearch-es-elastic-user` Secret.
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: elasticsearch
+  namespace: elk
+spec:
+  version: 9.4.4
+  nodeSets:
+    - name: default
+      count: 1
+      config:
+        # Avoids requiring vm.max_map_count on the Minikube node.
+        node.store.allow_mmap: false
+      podTemplate:
+        spec:
+          containers:
+            - name: elasticsearch
+              env:
+                - name: ES_JAVA_OPTS
+                  value: "-Xms1g -Xmx1g"
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 2Gi
+                limits:
+                  memory: 2Gi
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 5Gi

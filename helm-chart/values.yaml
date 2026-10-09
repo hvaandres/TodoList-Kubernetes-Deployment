@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: docker.io/hvaandres1409/my-node-app
   pullPolicy: IfNotPresent
-  tag: "latest"
+  tag: "elk"
 
 # Container & Service port
 ports:

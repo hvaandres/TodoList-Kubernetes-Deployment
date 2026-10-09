@@ -1,0 +1,30 @@
+# Kibana managed by the ECK operator, connected to the Elasticsearch above.
+# Log in as `elastic` with the password from the
+# `elasticsearch-es-elastic-user` Secret (see README.md).
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: kibana
+  namespace: elk
+spec:
+  version: 9.4.4
+  count: 1
+  elasticsearchRef:
+    name: elasticsearch
+  http:
+    tls:
+      # Plain HTTP so `kubectl port-forward` works without browser warnings.
+      # Elasticsearch itself keeps TLS enabled.
+      selfSignedCertificate:
+        disabled: true
+  podTemplate:
+    spec:
+      containers:
+        - name: kibana
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              # Kibana 9.4+ can be OOM-killed below 2Gi.
+              memory: 2Gi
