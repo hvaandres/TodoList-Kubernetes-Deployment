@@ -39,6 +39,11 @@ datasources:
         access: proxy
         url: http://prometheus-server.monitoring.svc.cluster.local
         isDefault: true
+      # Loki runs in its own namespace; see ../loki/.
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.logging.svc.cluster.local:3100
 
 # Sidecars let you ship dashboards/datasources as labeled ConfigMaps.
 sidecar:

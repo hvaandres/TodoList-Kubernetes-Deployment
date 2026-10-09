@@ -68,6 +68,10 @@ Open http://localhost:3001.
   - Todo action counters
   - Frontend errors
   - Todo app pod restarts
+- `dashboards/todo-app-logs.json` (requires Loki, see `../loki/README.md`)
+  - Log volume by level and by namespace
+  - Todo events, HTTP status and p95 latency derived from logs
+  - Frontend errors and a searchable Todo app log stream
 - `dashboards/kubernetes-overview.json`
   - Node CPU usage
   - Node memory usage
