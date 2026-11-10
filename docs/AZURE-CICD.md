@@ -30,8 +30,10 @@ Only static build files and the built-in-module server enter the runtime stage.
 CD runs only in `jordannaegle/TodoList` on the exact assignment branch, for
 push/manual events. PRs and other branches cannot publish. Only CD has
 `id-token: write`. No client secret, ACR admin password, VM, or cluster is used.
-The Docker image ID identifies the image configuration; the registry digest
-identifies the registry manifest. These are different hashes.
+The pipeline compares the Docker image identifier reported by `docker inspect`
+before and after transfer and publication. A registry digest identifies the
+manifest or OCI index; its relationship to Docker's reported identifier depends
+on the image store and image format, so the workflow checks actual values.
 
 ## 1. Create ACR in the Azure portal
 
@@ -51,7 +53,43 @@ identifies the registry manifest. These are different hashes.
 ACR is a billable resource even without a running application. Delete this
 assignment's resources after grading when you no longer need the image.
 
-## 2. Create an app registration and branch federation
+## 2. Configure an OIDC identity
+
+### If the university blocks Entra ID / App registrations (401)
+
+The portal confirmed the `uvu-jordan-naegle` subscription is active and the user
+has Owner access. Registry `jordanit3200` exists in `rg-it3200-cicd`, North Central
+US. App registrations and the Entra overview both returned 401. This alone does
+not establish the exact tenant policy causing the denial.
+
+Use a **user-assigned managed identity** through Azure Resource Manager. Azure
+Login supports OIDC federation with this identity as well as app registrations;
+the workflow YAML does not need to change. Creation can still be restricted by
+subscription policy, so verify each operation succeeds.
+
+1. Search the portal for **Managed Identities** > **Create**.
+2. Select `uvu-jordan-naegle`, resource group `rg-it3200-cicd`, region **North
+   Central US**, and name `it3200-todolist-github`. Review and create.
+3. Open the identity and copy its **Client ID** for `AZURE_CLIENT_ID`.
+   Its **Principal ID** is a different identifier used for role assignment.
+4. Open **Settings > Federated credentials > Add credential**. Choose **GitHub
+   Actions deploying Azure resources**, then use the same organization,
+   repository, branch, issuer, audience, and subject shown in the table below.
+5. For step 3's registry role assignments, choose member type **Managed
+   identity**, identity type **User-assigned managed identity**, and select this
+   identity. Grant registry-scoped **AcrPush** plus **Reader**.
+6. Use tenant ID `1ea2b65f-2f5e-440e-b025-dfdfafd8e097`, subscription ID
+   `b5352350-3f6f-4580-8b5b-c228a662df25`, and `ACR_NAME=jordanit3200` for the
+   remaining GitHub variables. These are resource/account identifiers, not keys.
+
+Use the dedicated assignment identity rather than an identity from another project.
+No VM attachment or `auth-type: IDENTITY` is needed: this uses federated OIDC
+on the GitHub-hosted runner.
+
+[Microsoft's managed identity federation guide](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust-user-assigned-managed-identity)
+documents this supported setup.
+
+### App registration route, when permitted by your tenant
 
 1. Search **Microsoft Entra ID** > **App registrations** > **New registration**.
 2. Name it `it3200-todolist-github`. Choose the current directory only; no redirect
@@ -63,7 +101,9 @@ assignment's resources after grading when you no longer need the image.
    | Field | Exact value |
    | --- | --- |
    | Organization | `jordannaegle` |
+   | Organization ID | `79476521` |
    | Repository | `TodoList` |
+   | Repository ID | `1391247999` |
    | Entity type | Branch |
    | Branch | `codex/azure-container-pipeline` |
    | Credential name | `github-todolist-assignment-branch` |
@@ -73,10 +113,14 @@ assignment's resources after grading when you no longer need the image.
 6. Confirm the generated subject is exactly:
 
    ```text
-   repo:jordannaegle/TodoList:ref:refs/heads/codex/azure-container-pipeline
+   repo:jordannaegle@79476521/TodoList@1391247999:ref:refs/heads/codex/azure-container-pipeline
    ```
 
-7. Add the credential. Do not create a client secret. Do not add a GitHub
+7. GitHub's OIDC settings API confirmed `use_immutable_subject: true` and prefix
+   `repo:jordannaegle@79476521/TodoList@1391247999` for this fork. Organization ID
+   means the numeric GitHub owner ID, even for a personal account. It is not the
+   username or Azure tenant ID. Add the credential. Do not create a client secret.
+   Do not add a GitHub
    Environment to the publish job without updating federation: it changes the
    OIDC subject to an environment subject.
 
@@ -114,6 +158,11 @@ Under **Repository variables**, create these exact names:
 | `AZURE_TENANT_ID` | Directory (tenant) ID |
 | `AZURE_SUBSCRIPTION_ID` | Student subscription ID |
 | `ACR_NAME` | Actual registry resource name, without `.azurecr.io` |
+
+For the completed setup, `AZURE_CLIENT_ID` is the managed identity's Client ID,
+`30222b82-997d-48f3-91fa-05e05a4c0dfe`. Its principal/object ID is
+`a73b384f-926c-4eb9-8da9-92ffdbde31a2`. Federation and registry-scoped AcrPush and
+Reader were verified in the portal, and all four variables were saved to GitHub.
 
 These are identifiers, not passwords. This workflow reads `vars`, so creating
 them only under Secrets will not satisfy its configuration check.

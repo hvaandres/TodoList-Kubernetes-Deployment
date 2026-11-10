@@ -31,8 +31,14 @@ workflows; preserve them under `.github/workflow-archive/` instead.
 - [x] Validate workflow syntax, build locally, smoke-test, and scan the image.
 - [x] Document exact branch federation, registry-scoped permissions, GitHub
       variables, first-run steps, troubleshooting, screenshots, and reflection.
-- [ ] Review changes, push the assignment branch, and inspect GitHub CI.
-- [ ] After Azure setup, verify publication and collect actual screenshots.
+- [x] Review changes, push the assignment branch, and inspect GitHub CI.
+- [x] After Azure setup, verify publication and collect actual screenshots.
+
+Completed cloud verification: run 42747361166, attempt 2, both jobs successful.
+Used a dedicated user-assigned managed identity after Entra portal access was
+denied. GitHub API confirmed immutable owner/repository subject IDs, which were
+matched exactly in the saved federated credential. Screenshots and the short
+reflection are recorded in `submission/README.md`.
 
 ## Verification focus
 

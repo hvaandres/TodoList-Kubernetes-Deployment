@@ -13,41 +13,48 @@ Branch: `codex/azure-container-pipeline`.
   Alpine runtime image. The original Debian runtime failed the gate.
 - Actionlint v1.7.12 and `git diff --check` passed.
 
-These local checks do not prove Azure publication. The successful cloud run
-and registry screenshots below are still required. Existing npm audit findings
+Existing npm audit findings
 in build-stage dependencies remain outside the runtime-image scan's scope.
 
-## Evidence to collect after a successful Azure publish
+## Successful Azure publication: November 9, 2026, 8:30 p.m. MST
 
-Capture real screenshots from the completed run and Azure. Do not use a local
-build or a failed CD run as proof of publication. Save images in this directory.
+Both CI and CD passed on attempt 2. Azure OIDC and ACR login succeeded; CD pushed
+the saved CI image, queried its registry digest, pulled by digest, and confirmed
+the image identifier matched CI. Azure portal independently showed the same tag
+and digest. No VM or Kubernetes deployment was performed.
 
-- [ ] `01-actions-overview.png`: run title, branch/commit, and both jobs green.
-- [ ] `01a-ci-steps.png`: CI job with checkout, Docker build, smoke test, and
-      container security scan visibly successful. Expand the scan for results.
-- [ ] `01b-cd-steps.png`: CD job with image verification, Azure OIDC login, ACR
-      login, and image push visibly successful. Expand push for its digest.
-- [ ] `02-acr-repository.png`: Azure registry name and `todo-list` repository.
-- [ ] `03-image-details.png`: full commit tag, registry context, and image digest.
+- [x] `01-actions-overview.jpg`: run title, branch/commit, and both jobs green.
+- [x] `01a-ci-steps.jpg`: checkout, Docker build, smoke test, and container scan.
+- [x] `01b-cd-steps.jpg`: image verification, Azure OIDC login, ACR login, and push.
+- [x] `02-acr-repository.jpg`: Azure registry name and `todo-list` repository.
+- [x] `03-image-details.jpg`: full commit tag, registry context, and image digest.
+- [x] `scan-report/trivy-results.txt`: downloaded report from the successful CI job;
+      zero findings at the configured HIGH/CRITICAL threshold.
+
+Screenshots are stored locally in this directory and excluded from Git commits.
+Review them before uploading your assignment. The text evidence and reflection
+are versioned in the repository.
 
 The extra CI/CD views make the assignment's first screenshot requirement legible
 when a single screenshot cannot show all required steps. Avoid account menus or
 unrelated personal details in captures. No credential values are needed.
 
-## Fill in from the successful run
+## Verified run details
 
-- Workflow run URL: **pending**
-- Published commit SHA: **pending**
-- Registry login server: **pending**
-- Image: **pending** (`<login-server>/todo-list:<full-commit-sha>`)
-- Registry manifest digest: **pending**
-- Match between Actions digest and Azure details: **pending**
+- Workflow run: https://github.com/jordannaegle/TodoList/actions/runs/42747361166/attempts/2
+- Published commit SHA: `7f87672c0fc6af0f26fd12aa3cf23b058c659849`
+- Registry login server: `jordanit3200.azurecr.io`
+- Image: `jordanit3200.azurecr.io/todo-list:7f87672c0fc6af0f26fd12aa3cf23b058c659849`
+- Registry index digest: `sha256:0ce254423fd6f8aef42ae39e26f4abbf93c5bc04ec78a5d3db1d05c396958fb8`
+- Match between Actions digest and Azure details: **confirmed**
+- Authentication: user-assigned managed identity with branch-specific GitHub OIDC.
+
+GitHub also displayed action-runtime deprecation and runner-image migration
+annotations. These were warnings/notices; both jobs completed successfully.
 
 ## Short reflection draft
 
-Review this draft in your own words and submit it with your actual evidence.
-It describes the pipeline design; it is not a claim that Azure publication has
-already completed.
+Review this draft in your own words and submit it with the captured evidence.
 
 1. **What is the difference between CI and CD?** CI checks whether a change can
    be integrated successfully. In this project it builds the Docker image,
