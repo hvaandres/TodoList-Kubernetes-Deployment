@@ -22,6 +22,9 @@ Debian packages and unused package-manager dependencies. Keep the builder but
 use Alpine for the final runtime, remove unused package managers, and recheck
 the production endpoints and vulnerability gate before publishing.
 
+GitHub also rejected the comment-only legacy workflow files as invalid active
+workflows; preserve them under `.github/workflow-archive/` instead.
+
 ## Steps
 
 - [x] Implement the workflow with read-only CI permissions and CD-only OIDC.

@@ -1,7 +1,9 @@
 # IT3200: build, scan, and publish to Azure Container Registry
 
 The workflow is `.github/workflows/azure-container-pipeline.yml`.
-The old commented workflows remain inactive. This assignment stops at ACR.
+The old commented workflows are preserved in `.github/workflow-archive/`.
+Keeping comment-only YAML in the active workflows directory caused GitHub
+workflow syntax failures. This assignment stops at ACR.
 
 The original `node:22-slim` runtime failed the HIGH/CRITICAL scan. The Dockerfile
 keeps the existing Debian build stage but uses `node:22-alpine` for production,
