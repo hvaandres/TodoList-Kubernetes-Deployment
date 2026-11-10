@@ -34,7 +34,8 @@ jobs:
           set -euo pipefail
           docker run --detach --name todo-ci --publish 127.0.0.1:3000:3000 "$LOCAL_IMAGE"
           trap 'docker logs todo-ci; docker rm --force todo-ci' EXIT
-          curl --fail --silent --show-error --retry 15 --retry-delay 2 --retry-connrefused \
+          curl --fail --silent --show-error --max-time 5 \
+            --retry 15 --retry-delay 2 --retry-all-errors \
             http://127.0.0.1:3000/healthz | tee health.json
           node -e 'if (JSON.parse(require("fs").readFileSync("health.json")).status !== "ok") process.exit(1)'
           curl --fail --silent --show-error http://127.0.0.1:3000/ > index.html
