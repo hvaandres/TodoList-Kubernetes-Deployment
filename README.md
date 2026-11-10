@@ -1,5 +1,10 @@
 # Todo List Kubernetes Deployment
 
+For the IT3200 Azure CI/CD assignment, see [the Azure setup guide](docs/AZURE-CICD.md)
+and [submission evidence and reflection](submission/README.md). The assignment
+workflow builds, smoke-tests, scans, and publishes the same image to ACR through
+Azure OIDC; it does not deploy to Kubernetes.
+
 This repository contains a React Todo List application packaged as a
 production Docker image and deployed to Kubernetes with Helm.
 

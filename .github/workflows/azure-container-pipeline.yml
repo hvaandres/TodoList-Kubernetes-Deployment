@@ -1,0 +1,183 @@
+name: TodoList CI and ACR delivery
+
+on:
+  push:
+    branches: [codex/azure-container-pipeline]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LOCAL_IMAGE: todo-list:${{ github.sha }}
+
+jobs:
+  ci:
+    name: CI - build, test, and scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      image_id: ${{ steps.image.outputs.id }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Build Docker image
+        run: docker build --pull --tag "$LOCAL_IMAGE" .
+
+      - name: Smoke-test production container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name todo-ci --publish 127.0.0.1:3000:3000 "$LOCAL_IMAGE"
+          trap 'docker logs todo-ci; docker rm --force todo-ci' EXIT
+          curl --fail --silent --show-error --retry 15 --retry-delay 2 --retry-connrefused \
+            http://127.0.0.1:3000/healthz | tee health.json
+          node -e 'if (JSON.parse(require("fs").readFileSync("health.json")).status !== "ok") process.exit(1)'
+          curl --fail --silent --show-error http://127.0.0.1:3000/ > index.html
+          grep -qi '<html' index.html
+
+      - name: Scan container - block HIGH and CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          scanners: vuln
+          vuln-type: os,library
+          format: table
+          output: trivy-results.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+
+      - name: Show security scan report
+        if: ${{ always() }}
+        run: |
+          if [ -f trivy-results.txt ]; then
+            cat trivy-results.txt
+            cat trivy-results.txt >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload scan evidence even on failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: security-scan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: trivy-results.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Save the validated image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "id=$(docker image inspect --format '{{.Id}}' "$LOCAL_IMAGE")" >> "$GITHUB_OUTPUT"
+          docker save "$LOCAL_IMAGE" --output image.tar
+          sha256sum image.tar > image.tar.sha256
+
+      - name: Transfer validated image to CD
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: validated-image-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            image.tar
+            image.tar.sha256
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: CD - publish validated image to ACR
+    needs: ci
+    if: >-
+      github.repository == 'jordannaegle/TodoList' &&
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/codex/azure-container-pipeline'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      EXPECTED_IMAGE_ID: ${{ needs.ci.outputs.image_id }}
+    steps:
+      - name: Check Azure configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID ACR_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Set repository Actions variable $name. See docs/AZURE-CICD.md."
+              exit 1
+            fi
+          done
+
+      - name: Download the CI image from this run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: validated-image-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Verify and load the exact scanned image
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum --check image.tar.sha256
+          docker load --input image.tar
+          actual_id=$(docker image inspect --format '{{.Id}}' "$LOCAL_IMAGE")
+          test "$actual_id" = "$EXPECTED_IMAGE_ID"
+          echo "Verified scanned image: $actual_id"
+
+      - name: Authenticate to Azure using OIDC
+        uses: azure/login@8216e11d8cd9b42fe925c852af8e76311ff067ac # v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Authenticate to ACR
+        id: registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          az acr login --name "$ACR_NAME"
+          login_server=$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)
+          echo "server=$login_server" >> "$GITHUB_OUTPUT"
+
+      - name: Tag, push, and verify image in ACR
+        shell: bash
+        env:
+          LOGIN_SERVER: ${{ steps.registry.outputs.server }}
+        run: |
+          set -euo pipefail
+          image="$LOGIN_SERVER/todo-list:$GITHUB_SHA"
+          docker tag "$LOCAL_IMAGE" "$image"
+          docker push "$image"
+          digest=$(az acr repository show --name "$ACR_NAME" --image "todo-list:$GITHUB_SHA" \
+            --query digest --output tsv)
+          test -n "$digest"
+          published_image="$LOGIN_SERVER/todo-list@$digest"
+          docker pull "$published_image"
+          published_id=$(docker image inspect --format '{{.Id}}' "$published_image")
+          test "$published_id" = "$EXPECTED_IMAGE_ID"
+          {
+            echo '## Published validated TodoList image'
+            echo "- Image: \`$image\`"
+            echo "- Registry digest: \`$digest\`"
+            echo "- Scanned image ID: \`$EXPECTED_IMAGE_ID\`"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo '- CI build, smoke test, and HIGH/CRITICAL vulnerability gate passed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log out of Docker registry
+        if: ${{ always() && steps.registry.outputs.server != '' }}
+        env:
+          LOGIN_SERVER: ${{ steps.registry.outputs.server }}
+        run: docker logout "$LOGIN_SERVER"

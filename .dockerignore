@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+build
+coverage
+.netlify
+.env*
+*.log
+docs
+submission
+helm-chart
+grafana
