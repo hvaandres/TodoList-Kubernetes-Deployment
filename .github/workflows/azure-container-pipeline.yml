@@ -2,7 +2,7 @@ name: TodoList CI and ACR delivery
 
 on:
   push:
-    branches: [codex/azure-container-pipeline]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -97,7 +97,7 @@ jobs:
     if: >-
       github.repository == 'jordannaegle/TodoList' &&
       github.event_name != 'pull_request' &&
-      github.ref == 'refs/heads/codex/azure-container-pipeline'
+      github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
